@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Urinal Etiquette</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+
+        :root {
+            --bg:      #fce4ec;
+            --floor:   #bbdefb;
+            --accent:  #6c63ff;
+            --success: #00c853;
+            --danger:  #ff1744;
+            --warn:    #ffc400;
+            --dark:    #1a1a2e;
+            --card:    #fffde7;
+            --font:    'Fredoka One', sans-serif;
+        }
+
+        *, *::before, *::after {
+            margin: 0; padding: 0; box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        html, body {
+            width: 100%; height: 100%; overflow: hidden;
+            font-family: var(--font);
+            background: var(--bg);
+        }
+
+        #game-container {
+            width: 100vw;  height: 100vh;
+            width: 100dvw; height: 100dvh;
+            position: relative;
+        }
+
+        canvas {
+            display: block; width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0; z-index: 0;
+        }
+
+        /* ── UI LAYER ──────────────────────────────────────── */
+        #ui-layer {
+            position: absolute; inset: 0;
+            pointer-events: none;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 2000;
+        }
+
+        /* ── HUD ───────────────────────────────────────────── */
+        #hud {
+            position: absolute;
+            top: max(14px, env(safe-area-inset-top, 14px));
+            left: max(14px, env(safe-area-inset-left, 14px));
+            right: max(14px, env(safe-area-inset-right, 14px));
+            display: none; justify-content: space-between; align-items: center;
+            z-index: 100;
+        }
+
+        .hud-badge {
+            background: var(--dark);
+            color: #fff;
+            border-radius: 999px;
+            padding: clamp(5px,1.5vw,10px) clamp(12px,3vw,22px);
+            font-size: clamp(0.8rem, 2.2vw, 1.1rem);
+            letter-spacing: 0.03em;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+            pointer-events: auto;
+            white-space: nowrap;
+        }
+
+        /* ── TIMER ─────────────────────────────────────────── */
+        #timer-container {
+            position: absolute;
+            top: clamp(52px, 10vh, 82px);
+            left: 50%; transform: translateX(-50%);
+            width: min(78%, 420px);
+            height: clamp(10px, 1.6vh, 14px);
+            background: rgba(255,255,255,0.35);
+            border-radius: 999px;
+            display: none;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15), inset 0 1px 3px rgba(0,0,0,0.1);
+            backdrop-filter: blur(4px);
+        }
+        #timer-bar {
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, var(--success), #69f0ae);
+            border-radius: 999px;
+            transform-origin: left;
+            transition: width 0.1s linear, background 0.4s;
+        }
+
+        /* ── HINT BAR ──────────────────────────────────────── */
+        #hint-bar {
+            position: absolute;
+            bottom: max(18px, env(safe-area-inset-bottom, 18px));
+            left: 50%; transform: translateX(-50%);
+            background: rgba(26,26,46,0.75);
+            color: #fff;
+            font-size: clamp(0.75rem, 2vw, 1rem);
+            padding: 7px 20px;
+            border-radius: 999px;
+            white-space: nowrap;
+            display: none;
+            pointer-events: none;
+            backdrop-filter: blur(6px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            animation: fadeInUp 0.4s ease;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+            to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+
+        /* ── SCREENS / CARDS ───────────────────────────────── */
+        .screen {
+            display: none; flex-direction: column;
+            align-items: center; justify-content: center;
+            width: min(88vw, 420px);
+            padding: clamp(1.5rem, 4vw, 2.8rem) clamp(1.2rem, 4vw, 2.2rem);
+            background: var(--card);
+            border: 4px solid var(--dark);
+            border-radius: clamp(18px, 4vw, 28px);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.18), 8px 8px 0 var(--dark);
+            pointer-events: auto;
+            animation: popIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+            text-align: center;
+        }
+        .screen.active { display: flex; }
+
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.7); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+
+        .game-icon { font-size: clamp(2.5rem, 8vw, 4rem); margin-bottom: 0.4rem; }
+
+        h1 {
+            font-size: clamp(2rem, 7vw, 3.2rem);
+            background: linear-gradient(135deg, #6c63ff, #f50057);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem; line-height: 1.1;
+            filter: drop-shadow(2px 3px 0 rgba(0,0,0,0.12));
+        }
+
+        h2 {
+            font-size: clamp(1.5rem, 5vw, 2.6rem);
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+        }
+
+        p.subtitle {
+            font-size: clamp(0.85rem, 2.4vw, 1.1rem);
+            margin-bottom: 1.6rem;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        /* ── BUTTONS ───────────────────────────────────────── */
+        .btn {
+            background: linear-gradient(135deg, var(--accent), #9c27b0);
+            color: #fff;
+            border: 3px solid var(--dark);
+            padding: clamp(0.75rem, 2.5vw, 1.1rem) clamp(1rem, 4vw, 2rem);
+            border-radius: clamp(12px, 3vw, 18px);
+            font-size: clamp(0.95rem, 2.8vw, 1.2rem);
+            font-family: var(--font);
+            cursor: pointer;
+            transition: transform 0.12s, box-shadow 0.12s, filter 0.12s;
+            width: 100%; margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 6px 20px rgba(108,99,255,0.35), 4px 4px 0 var(--dark);
+            min-height: 48px;
+        }
+        .btn:hover  {
+            transform: translate(-2px, -3px);
+            box-shadow: 0 10px 28px rgba(108,99,255,0.45), 6px 7px 0 var(--dark);
+            filter: brightness(1.08);
+        }
+        .btn:active {
+            transform: translate(3px, 3px);
+            box-shadow: 0 2px 8px rgba(108,99,255,0.2), 1px 1px 0 var(--dark);
+        }
+        .btn.secondary {
+            background: linear-gradient(135deg, #fff, #f0f0f0);
+            color: var(--dark);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1), 4px 4px 0 var(--dark);
+        }
+
+        /* ── SCORE BOX ─────────────────────────────────────── */
+        .score-box {
+            font-size: clamp(2rem, 6vw, 3rem);
+            background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+            border: 3px solid var(--dark);
+            border-radius: clamp(12px, 3vw, 18px);
+            padding: 16px 24px;
+            margin-bottom: 1rem;
+            width: 100%;
+            text-align: center;
+            box-shadow: 4px 4px 0 var(--dark);
+        }
+
+        /* ── SHAKE ─────────────────────────────────────────── */
+        @keyframes shake {
+            0%,100% { transform: translateX(0) rotate(0); }
+            20%,60%  { transform: translateX(-8px) rotate(-1deg); }
+            40%,80%  { transform: translateX(8px) rotate(1deg); }
+        }
+        .shake { animation: shake 0.45s ease-in-out; }
+
+        /* ── RESPONSIVE ────────────────────────────────────── */
+        @media (max-width: 480px) {
+            .screen { width: 93vw; }
+            .hud-badge { font-size: 0.78rem; }
+            #timer-container { top: 50px; }
+        }
+        @media (min-width: 481px) and (max-width: 1024px) {
+            .screen { max-width: 460px; }
+        }
+        @media (max-height: 500px) and (orientation: landscape) {
+            .screen {
+                flex-direction: row; flex-wrap: wrap;
+                padding: 0.7rem 1.2rem; gap: 0.5rem;
+                max-width: 90vw; width: 90vw;
+            }
+            h1 { font-size: 1.4rem; margin-bottom: 0.2rem; }
+            p.subtitle { font-size: 0.8rem; margin-bottom: 0.4rem; }
+            .btn { margin-bottom: 0.3rem; min-height: 38px; padding: 0.45rem 1rem; }
+            #timer-container { top: 36px; height: 9px; }
+            #hud { top: 5px; }
+        }
+    </style>
+
+
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud">
+        <div class="hud-badge" id="hud-level">📋 Scenario 1/8</div>
+        <div class="hud-badge" id="hud-score">⭐ Score: 0</div>
+    </div>
+    <div id="timer-container"><div id="timer-bar"></div></div>
+    <div id="hint-bar">👆 Tap the best urinal!</div>
+
+    <div id="ui-layer">
+        <!-- Main Menu -->
+        <div id="screen-menu" class="screen active">
+            <div class="game-icon">🚻</div>
+            <h1>URINAL<br>ETIQUETTE</h1>
+            <p class="subtitle">Can you navigate the unwritten rules<br>of the men's restroom? 🤔</p>
+            <button class="btn" id="btn-start" onclick="game.startSession()">🎮 START GAME</button>
+            <p style="font-size:0.78rem;color:#999;margin-top:0.3rem;">8 scenarios • social logic puzzle</p>
+        </div>
+
+        <!-- Final Score Screen -->
+        <div id="screen-final" class="screen">
+            <div class="game-icon" id="final-emoji">🏆</div>
+            <h2 id="final-rating">LEGEND</h2>
+            <p class="subtitle" style="margin-bottom:0.8rem;">Final Result</p>
+            <div class="score-box">
+                <span id="final-score" style="color:var(--success);">8/8</span>
+            </div>
+            <p id="final-hook" style="font-size:1rem;color:#555;margin-bottom:1.4rem;">Hook</p>
+            <button class="btn" onclick="game.startSession()">🔄 PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script>
+        class AudioManager {
+            constructor() { this.ctx = null; }
+            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+            playTone(f, t, d, v) {
+                if (!this.ctx) return;
+                const o = this.ctx.createOscillator();
+                const g = this.ctx.createGain();
+                o.type = t;
+                o.frequency.setValueAtTime(f, this.ctx.currentTime);
+                o.frequency.exponentialRampToValueAtTime(f * 0.1, this.ctx.currentTime + d);
+                g.gain.setValueAtTime(v, this.ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + d);
+                o.connect(g); g.connect(this.ctx.destination);
+                o.start(); o.stop(this.ctx.currentTime + d);
+            }
+            success() { 
+                this.playTone(523.25, 'square', 0.1, 0.1);
+                setTimeout(() => this.playTone(659.25, 'square', 0.1, 0.1), 100);
+                setTimeout(() => this.playTone(783.99, 'square', 0.2, 0.1), 200);
+            }
+            fail() { 
+                this.playTone(200, 'sawtooth', 0.2, 0.1); 
+                setTimeout(() => this.playTone(150, 'sawtooth', 0.4, 0.1), 150);
+            }
+            drumroll() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(50, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, this.ctx.currentTime + 1.2);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.4, this.ctx.currentTime + 1.1);
+                gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 1.2);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 1.2);
+            }
+            cymbal() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.8);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.8);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.8);
+            }
+        }
+
+        class Confetti {
+            constructor(x, y) {
+                this.x = x; this.y = y;
+                this.vx = (Math.random() - 0.5) * 15;
+                this.vy = (Math.random() - 1.0) * 15;
+                this.life = 1.0;
+                this.color = ['#3b82f6', '#22c55e', '#facc15', '#ef4444', '#a855f7'][Math.floor(Math.random()*5)];
+                this.size = 6 + Math.random() * 8;
+                this.rot = Math.random() * Math.PI;
+                this.vrot = (Math.random() - 0.5);
+            }
+            update() {
+                this.x += this.vx; this.y += this.vy;
+                this.vy += 0.5; // Gravity
+                this.life -= 0.015;
+                this.rot += this.vrot;
+            }
+            draw(ctx) {
+                if (this.life <= 0) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rot);
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+                ctx.restore();
+            }
+        }
+
+        class FeedbackMark {
+            constructor(x, y, isCorrect) {
+                this.x = x; this.y = y; this.isCorrect = isCorrect;
+                this.life = 1.5; this.scale = 0;
+            }
+            update(dt) {
+                this.life -= dt / 1000;
+                if (this.scale < 1) this.scale += 0.2;
+            }
+            draw(ctx) {
+                if (this.life <= 0) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.scale(this.scale, this.scale);
+                ctx.globalAlpha = Math.min(1, this.life * 2);
+                
+                if (this.isCorrect) {
+                    ctx.fillStyle = '#22c55e';
+                    ctx.beginPath(); ctx.arc(0, 0, 30, 0, Math.PI*2); ctx.fill();
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                    ctx.beginPath(); ctx.moveTo(-10, 2); ctx.lineTo(-2, 10); ctx.lineTo(12, -10); ctx.stroke();
+                } else {
+                    ctx.fillStyle = '#ef4444';
+                    ctx.beginPath(); ctx.arc(0, 0, 30, 0, Math.PI*2); ctx.fill();
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+                    ctx.beginPath(); ctx.moveTo(-10, -10); ctx.lineTo(10, 10); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(10, -10); ctx.lineTo(-10, 10); ctx.stroke();
+                }
+                ctx.restore();
+            }
+        }
+
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.audio = new AudioManager();
+                
+                this.state = 'MENU';
+                this.level = 1;
+                this.totalLevels = 8;
+                this.score = 0;
+                
+                this.urinals = [];
+                this.entities = []; // Particles and Feedback marks
+                
+                this.lastTime = performance.now();
+                this.timeLeft = 30.0;
+                
+                this.initEvents();
+                this.resize();
+                this.loop();
+            }
+
+            initEvents() {
+                window.addEventListener('resize', () => this.resize());
+                
+                const getCoords = (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    return { x: clientX - rect.left, y: clientY - rect.top };
+                };
+
+                const handleTap = (e) => {
+                    if (this.state !== 'PLAYING') return;
+                    e.preventDefault();
+                    const { x, y } = getCoords(e);
+                    this.input(x, y);
+                };
+
+                this.canvas.addEventListener('mousedown', handleTap);
+                this.canvas.addEventListener('touchstart', handleTap, {passive: false});
+
+                // Hover tracking for glow effect on FREE urinals
+                this.hoveredUrinal = null;
+                this.canvas.addEventListener('mousemove', (e) => {
+                    if (this.state !== 'PLAYING') return;
+                    const { x, y } = getCoords(e);
+                    const hit = this.urinals.find(u => {
+                        const uW = u.w, uH = u.h;
+                        return u.status === 'FREE'
+                            && Math.abs(x - u.x) < uW * 0.8
+                            && y > u.y - uH && y < u.y + uH * 0.6;
+                    });
+                    this.hoveredUrinal = hit ? hit.id : null;
+                    this.canvas.style.cursor = hit ? 'pointer' : 'default';
+                });
+                this.canvas.addEventListener('mouseleave', () => {
+                    this.hoveredUrinal = null;
+                    this.canvas.style.cursor = 'default';
+                });
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                if (this.state === 'PLAYING') this.generateLayout();
+            }
+
+            startSession() {
+                this.audio.init();
+                this.score = 0;
+                this.startLevel(1);
+            }
+
+            startLevel(n) {
+                this.level = n;
+                this.state = 'PLAYING';
+                this.entities = [];
+                this.timeLeft = 30.0;
+                
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                document.getElementById('hud').style.display = 'flex';
+                document.getElementById('timer-container').style.display = 'block';
+                document.getElementById('hint-bar').style.display = 'block';
+                
+                document.getElementById('hud-level').textContent = `📋 Scenario ${this.level}/${this.totalLevels}`;
+                document.getElementById('hud-score').textContent = `⭐ Score: ${this.score}`;
+                
+                document.getElementById('gameCanvas').classList.remove('shake');
+                
+                this.generateLayout();
+            }
+
+            generateLayout() {
+                this.urinals = [];
+                let config = [];
+                
+                const patterns = [
+                    ['FREE', 'OCCUPIED', 'FREE', 'FREE'],
+                    ['OCCUPIED', 'FREE', 'FREE', 'FREE', 'OCCUPIED'],
+                    ['FREE', 'OCCUPIED', 'FREE', 'OCCUPIED', 'FREE'],
+                    ['OCCUPIED', 'FREE', 'OCCUPIED', 'FREE', 'FREE'],
+                    ['FREE', 'OCCUPIED', 'FREE', 'OCCUPIED', 'FREE', 'OCCUPIED'],
+                    ['OCCUPIED', 'FREE', 'FREE', 'OCCUPIED', 'FREE', 'OCCUPIED'],
+                    ['FREE', 'OCCUPIED', 'OCCUPIED', 'OCCUPIED', 'FREE', 'FREE'],
+                    ['OCCUPIED', 'FREE', 'OCCUPIED', 'FREE', 'OCCUPIED', 'FREE', 'OCCUPIED'],
+                    ['FREE', 'FREE', 'OCCUPIED', 'FREE', 'FREE', 'OCCUPIED', 'FREE', 'FREE'],
+                    ['OCCUPIED', 'OCCUPIED', 'FREE', 'OCCUPIED', 'OCCUPIED', 'FREE']
+                ];
+
+                if (this.level === 8) {
+                    config = ['OCCUPIED', 'FREE', 'OCCUPIED', 'OCCUPIED', 'OCCUPIED', 'FREE', 'OCCUPIED', 'OCCUPIED', 'FREE'];
+                } else if (this.level <= 2) {
+                    config = patterns[Math.floor(Math.random() * 3)].slice();
+                } else {
+                    config = patterns[3 + Math.floor(Math.random() * (patterns.length - 3))].slice();
+                }
+
+                if (Math.random() > 0.5) config.reverse();
+
+                const count = config.length;
+                const spacing = this.canvas.width / (count + 1);
+                
+                for (let i = 0; i < count; i++) {
+                    const cx = spacing * (i + 1);
+                    const cy = this.canvas.height * 0.65;
+                    
+                    this.urinals.push({
+                        id: i,
+                        x: cx,
+                        y: cy,
+                        w: Math.min(spacing * 0.8, 100),
+                        h: 180,
+                        status: config[i] || 'FREE',
+                        pulse: Math.random() * Math.PI * 2
+                    });
+                }
+            }
+
+            input(x, y) {
+                if (this.state !== 'PLAYING') return;
+                
+                this.urinals.forEach(u => {
+                    const uH = Math.min(u.w, 80) * 1.5;
+                    const hit = x > u.x - u.w/2 && x < u.x + u.w/2 && y > u.y - uH - 50 && y < u.y + 100;
+                    if (hit) this.select(u);
+                });
+            }
+
+            getUrinalScore(u) {
+                if (u.status !== 'FREE') return -100;
+                let minDist = 999;
+                this.urinals.forEach(other => {
+                    if (other.status === 'OCCUPIED') {
+                        let d = Math.abs(other.id - u.id);
+                        if (d < minDist) minDist = d;
+                    }
+                });
+                
+                let score = 0;
+                if (minDist === 1) score -= 50;
+                else if (minDist === 2) score += 20;
+                else if (minDist >= 3) score += 50;
+                
+                // Edge bonus
+                if (u.id === 0 || u.id === this.urinals.length - 1) score += 10;
+                
+                return score;
+            }
+
+            select(u) {
+                this.state = 'FINISHING';
+                
+                // Determine best score available
+                let maxScore = -999;
+                this.urinals.forEach(ur => {
+                    if (ur.status === 'FREE') {
+                        let s = this.getUrinalScore(ur);
+                        if (s > maxScore) maxScore = s;
+                    }
+                });
+                
+                let isCorrect = false;
+                if (u.status === 'FREE') {
+                    let myScore = this.getUrinalScore(u);
+                    // Considered correct if it's the best option available and not terrible
+                    if (myScore >= maxScore && myScore > -50) isCorrect = true;
+                }
+
+                if (isCorrect) {
+                    this.score++;
+                    this.audio.success();
+                    document.getElementById('hud-score').textContent = `⭐ Score: ${this.score}`;
+                    this.entities.push(new FeedbackMark(u.x, u.y - 60, true));
+                    for(let i=0; i<30; i++) this.entities.push(new Confetti(u.x, u.y - 60));
+                } else {
+                    this.audio.fail();
+                    this.entities.push(new FeedbackMark(u.x, u.y - 60, false));
+                    const canvasEl = document.getElementById('gameCanvas');
+                    canvasEl.classList.remove('shake');
+                    void canvasEl.offsetWidth; // trigger reflow
+                    canvasEl.classList.add('shake');
+                }
+
+                setTimeout(() => {
+                    if (this.level < this.totalLevels) {
+                        this.startLevel(this.level + 1);
+                    } else {
+                        this.showFinalScore();
+                    }
+                }, 1200);
+            }
+
+            timeOut() {
+                this.state = 'FINISHING';
+                this.audio.fail();
+                const canvasEl = document.getElementById('gameCanvas');
+                canvasEl.classList.remove('shake');
+                void canvasEl.offsetWidth;
+                canvasEl.classList.add('shake');
+                
+                setTimeout(() => {
+                    if (this.level < this.totalLevels) {
+                        this.startLevel(this.level + 1);
+                    } else {
+                        this.showFinalScore();
+                    }
+                }, 1200);
+            }
+
+            showFinalScore() {
+                this.state = 'GAMEOVER';
+                document.getElementById('hud').style.display = 'none';
+                document.getElementById('timer-container').style.display = 'none';
+                document.getElementById('hint-bar').style.display = 'none';
+                
+                let rating = "CONFUSED";
+                let color = "var(--danger)";
+                let hook = "You are… CONFUSED 😵";
+                
+                if (this.score >= 7) { rating = "LEGEND"; color = "var(--success)"; hook = "You are… LEGEND 👑"; }
+                else if (this.score >= 5) { rating = "MAN"; color = "#3b82f6"; hook = "You are… MAN 😎"; }
+                else if (this.score >= 3) { rating = "BOY"; color = "#facc15"; hook = "You are… BOY 🤔"; }
+                
+                const rEl = document.getElementById('final-rating');
+                const sEl = document.getElementById('final-score');
+                const hEl = document.getElementById('final-hook');
+                
+                rEl.innerText = "???";
+                rEl.style.color = "#9ca3af";
+                sEl.innerText = "Calculating...";
+                sEl.style.color = "#9ca3af";
+                hEl.innerText = "";
+                
+                document.getElementById('screen-final').classList.add('active');
+                this.audio.drumroll();
+                
+                setTimeout(() => {
+                    this.audio.cymbal();
+                    rEl.innerText = rating;
+                    rEl.style.color = color;
+                    sEl.innerText = `${this.score}/${this.totalLevels}`;
+                    sEl.style.color = color;
+                    hEl.innerText = hook;
+                    
+                    rEl.style.animation = 'none';
+                    void rEl.offsetWidth;
+                    rEl.style.animation = 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                }, 1200);
+            }
+
+            loop() {
+                const now = performance.now();
+                const dt = now - this.lastTime;
+                this.lastTime = now;
+                
+                this.update(dt, now);
+                this.draw(now);
+                requestAnimationFrame(() => this.loop());
+            }
+
+            update(dt, now) {
+                if (this.state === 'PLAYING') {
+                    this.timeLeft -= dt / 1000;
+                    if (this.timeLeft <= 0) {
+                        this.timeLeft = 0;
+                        this.timeOut();
+                    }
+                    
+                    // Update timer UI
+                    const timerBar = document.getElementById('timer-bar');
+                    const pct = (this.timeLeft / 30.0) * 100;
+                    timerBar.style.width = `${pct}%`;
+                    if (pct < 25) timerBar.style.backgroundColor = 'var(--danger)';
+                    else if (pct < 50) timerBar.style.backgroundColor = '#facc15';
+                    else timerBar.style.backgroundColor = 'var(--success)';
+                }
+
+                this.entities.forEach(e => e.update(dt));
+                this.entities = this.entities.filter(e => e.life > 0);
+            }
+
+            draw(now) {
+                const { ctx, canvas } = this;
+                
+                // Wall — warm gradient
+                const horizonY = canvas.height * 0.75;
+                const wallGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
+                wallGrad.addColorStop(0, '#ffe0f0');
+                wallGrad.addColorStop(1, '#ffcfd2');
+                ctx.fillStyle = wallGrad;
+                ctx.fillRect(0, 0, canvas.width, horizonY);
+
+                // Floor — blue tiles
+                const floorGrad = ctx.createLinearGradient(0, horizonY, 0, canvas.height);
+                floorGrad.addColorStop(0, '#90caf9');
+                floorGrad.addColorStop(1, '#a2d2ff');
+                ctx.fillStyle = floorGrad;
+                ctx.fillRect(0, horizonY, canvas.width, canvas.height - horizonY);
+
+                // Floor grid
+                ctx.strokeStyle = 'rgba(2,132,199,0.45)'; ctx.lineWidth = 1.5;
+                const tileSize = 60;
+                for(let gx = (canvas.width/2) % tileSize; gx < canvas.width; gx += tileSize) {
+                    ctx.beginPath(); ctx.moveTo(gx, horizonY); ctx.lineTo(gx, canvas.height); ctx.stroke();
+                }
+                for(let gx = (canvas.width/2) % tileSize - tileSize; gx > 0; gx -= tileSize) {
+                    ctx.beginPath(); ctx.moveTo(gx, horizonY); ctx.lineTo(gx, canvas.height); ctx.stroke();
+                }
+                for(let gy = horizonY; gy < canvas.height; gy += tileSize) {
+                    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(canvas.width, gy); ctx.stroke();
+                }
+
+                // Draw Urinals (Front-facing)
+                this.urinals.forEach(u => {
+                    const { x, y, w, h, status } = u;
+                    
+                    const uW = Math.min(w, 80);
+                    const uH = uW * 1.5;
+                    
+                    // Top flange
+                    ctx.fillStyle = '#64748b';
+                    ctx.strokeStyle = '#1e293b';
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.ellipse(x, y - uH - 70, 16, 6, 0, 0, Math.PI*2);
+                    ctx.fill(); ctx.stroke();
+
+                    // Main vertical pipe
+                    ctx.fillRect(x - 8, y - uH - 70, 16, 60);
+                    ctx.strokeRect(x - 8, y - uH - 70, 16, 60);
+
+                    // Horizontal piece right (flush handle)
+                    ctx.fillRect(x + 8, y - uH - 50, 25, 12);
+                    ctx.strokeRect(x + 8, y - uH - 50, 25, 12);
+                    // Knob right
+                    ctx.beginPath(); ctx.arc(x + 35, y - uH - 44, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+                    // Horizontal piece left (control stop)
+                    ctx.fillRect(x - 18, y - uH - 48, 10, 8);
+                    ctx.strokeRect(x - 18, y - uH - 48, 10, 8);
+                    // Knob left
+                    ctx.fillRect(x - 22, y - uH - 52, 4, 16);
+                    ctx.strokeRect(x - 22, y - uH - 52, 4, 16);
+
+                    // Bottom nut/flange connecting to urinal
+                    ctx.fillRect(x - 14, y - uH - 10, 28, 10);
+                    ctx.strokeRect(x - 14, y - uH - 10, 28, 10);
+
+                    // Drain
+                    ctx.fillStyle = '#cbd5e1';
+                    ctx.strokeStyle = '#1e293b';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(x - 12, y + 20);
+                    ctx.lineTo(x + 12, y + 20);
+                    ctx.lineTo(x + 12, y + 40);
+                    ctx.quadraticCurveTo(x + 12, y + 50, x + 6, y + 50);
+                    ctx.lineTo(x - 6, y + 50);
+                    ctx.quadraticCurveTo(x - 12, y + 50, x - 12, y + 40);
+                    ctx.closePath();
+                    ctx.fill(); ctx.stroke();
+
+                    // Urinal Outer Body
+                    ctx.fillStyle = '#e2e8f0';
+                    ctx.strokeStyle = '#1e293b';
+                    ctx.lineWidth = 4;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(x - uW/2 + 5, y - uH);
+                    ctx.lineTo(x + uW/2 - 5, y - uH);
+                    // Right side flaring out
+                    ctx.quadraticCurveTo(x + uW/2 + 20, y - uH/2, x + uW/2 + 10, y + 20);
+                    // Bottom curve
+                    ctx.quadraticCurveTo(x, y + 40, x - uW/2 - 10, y + 20);
+                    // Left side flaring in
+                    ctx.quadraticCurveTo(x - uW/2 - 20, y - uH/2, x - uW/2 + 5, y - uH);
+                    ctx.closePath();
+                    ctx.fill(); ctx.stroke();
+                    
+                    // Inner bowl curve
+                    ctx.fillStyle = '#f8fafc';
+                    ctx.beginPath();
+                    ctx.moveTo(x - uW/2 + 15, y - uH + 15);
+                    ctx.lineTo(x + uW/2 - 15, y - uH + 15);
+                    ctx.quadraticCurveTo(x + uW/2 + 5, y - uH/2, x + uW/2 - 5, y + 10);
+                    ctx.quadraticCurveTo(x, y + 30, x - uW/2 + 5, y + 10);
+                    ctx.quadraticCurveTo(x - uW/2 - 5, y - uH/2, x - uW/2 + 15, y - uH + 15);
+                    ctx.closePath();
+                    ctx.fill(); ctx.stroke();
+                    
+                    // Top inner shadow/rim line (the curved indent)
+                    ctx.beginPath();
+                    ctx.moveTo(x - uW/2 + 15, y - uH + 15);
+                    ctx.quadraticCurveTo(x, y - uH + 40, x + uW/2 - 15, y - uH + 15);
+                    ctx.stroke();
+
+                    if (status === 'FREE') {
+                        // Hover glow — bright ring when mouse is over this urinal
+                        const isHovered = this.hoveredUrinal === u.id;
+                        const pulse = 0.7 + 0.3 * Math.sin(now / 500 + u.pulse);
+
+                        if (isHovered) {
+                            // Strong glow
+                            ctx.save();
+                            ctx.shadowColor = '#6c63ff';
+                            ctx.shadowBlur = 28;
+                            ctx.strokeStyle = '#6c63ff';
+                            ctx.lineWidth = 4;
+                            ctx.beginPath();
+                            ctx.roundRect(x - uW/2 - 12, y - uH - 12, uW + 24, uH + 48, 16);
+                            ctx.stroke();
+                            ctx.restore();
+                        } else {
+                            // Subtle pulse ring on all free urinals
+                            ctx.save();
+                            ctx.globalAlpha = 0.35 * pulse;
+                            ctx.strokeStyle = '#00c853';
+                            ctx.lineWidth = 3;
+                            ctx.beginPath();
+                            ctx.roundRect(x - uW/2 - 10, y - uH - 10, uW + 20, uH + 44, 14);
+                            ctx.stroke();
+                            ctx.restore();
+                        }
+
+                        // Number inside urinal
+                        ctx.fillStyle = '#ffff00';
+                        ctx.strokeStyle = '#1e293b';
+                        ctx.lineWidth = 6;
+                        ctx.font = `bold ${Math.max(uW * 0.55, 28)}px Arial, sans-serif`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.lineJoin = 'round';
+                        ctx.strokeText(u.id + 1, x, y - uH/2 + 5);
+                        ctx.fillText(u.id + 1, x, y - uH/2 + 5);
+                    } else if (status === 'BROKEN') {
+                        // Red cross
+                        ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
+                        ctx.beginPath();
+                        ctx.arc(x, y - uH/2, uW/2, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 6;
+                        ctx.beginPath(); ctx.moveTo(x - 20, y - uH/2 - 20); ctx.lineTo(x + 20, y - uH/2 + 20); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(x + 20, y - uH/2 - 20); ctx.lineTo(x - 20, y - uH/2 + 20); ctx.stroke();
+                    }
+
+                    // Occupied — clean minimal stick figure (solid black, no face/clothing)
+                    if (status === 'OCCUPIED') {
+                        ctx.save();
+
+                        // Bold line thickness — scales with urinal width
+                        const lw = Math.max(uW * 0.09, 7);
+                        const R  = Math.max(uW * 0.20, 14);  // head radius
+
+                        // Y key positions (canvas coords, y = urinal centre)
+                        const headCY    = y - uH - R * 1.1;          // head centre, above urinal
+                        const shoulderY = headCY + R + lw * 0.5;     // torso start
+                        const hipY      = shoulderY + R * 2.6;        // torso end / leg start
+                        const armEndY   = hipY - R * 0.4;             // arms end near hip
+                        const footY     = hipY + R * 2.4;             // feet
+
+                        // X offsets
+                        const armX = uW * 0.34;   // how far arms spread
+                        const legX = uW * 0.16;   // feet slightly apart
+
+                        ctx.strokeStyle = '#111111';
+                        ctx.fillStyle   = '#111111';
+                        ctx.lineWidth   = lw;
+                        ctx.lineCap     = 'round';
+                        ctx.lineJoin    = 'round';
+
+                        // HEAD — solid filled circle (no face features)
+                        ctx.beginPath();
+                        ctx.arc(x, headCY, R, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // TORSO — single vertical stroke
+                        ctx.beginPath();
+                        ctx.moveTo(x, shoulderY);
+                        ctx.lineTo(x, hipY);
+                        ctx.stroke();
+
+                        // LEFT ARM — diagonal line, relaxed at side
+                        ctx.beginPath();
+                        ctx.moveTo(x, shoulderY + R * 0.35);
+                        ctx.lineTo(x - armX, armEndY);
+                        ctx.stroke();
+
+                        // RIGHT ARM
+                        ctx.beginPath();
+                        ctx.moveTo(x, shoulderY + R * 0.35);
+                        ctx.lineTo(x + armX, armEndY);
+                        ctx.stroke();
+
+                        // LEFT LEG — feet slightly apart
+                        ctx.beginPath();
+                        ctx.moveTo(x, hipY);
+                        ctx.lineTo(x - legX, footY);
+                        ctx.stroke();
+
+                        // RIGHT LEG
+                        ctx.beginPath();
+                        ctx.moveTo(x, hipY);
+                        ctx.lineTo(x + legX, footY);
+                        ctx.stroke();
+
+                        ctx.restore();
+                    }
+                });
+
+                // Draw Entities (Confetti, Marks)
+                this.entities.forEach(e => e.draw(ctx));
+            }
+
+            roundRect(ctx, x, y, w, h, r) {
+                ctx.beginPath();
+                ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y);
+                ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+                ctx.lineTo(x+w, y+h-r);
+                ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+                ctx.lineTo(x+r, y+h);
+                ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+                ctx.lineTo(x, y+r);
+                ctx.quadraticCurveTo(x, y, x+r, y);
+                ctx.closePath();
+            }
+        }
+
+        window.game = new Game();
+    </script>
+</body>
+</html>
