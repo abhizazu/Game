@@ -511,18 +511,26 @@
                 if (Math.random() > 0.5) config.reverse();
 
                 const count = config.length;
-                const spacing = this.canvas.width / (count + 1);
-                
+                const W = this.canvas.width;
+                const H = this.canvas.height;
+
+                // Urinal size: fit all urinals across width, capped for desktop
+                const maxUW   = Math.min(W / (count + 1) * 0.82, W * 0.14, 110);
+                const uW      = Math.max(maxUW, 38);
+                const uH      = uW * 1.55;   // proportional height
+                const spacing = W / (count + 1);
+
+                // Y: centre of urinal bowl sits at 62% down screen
+                const cy = H * 0.62;
+
                 for (let i = 0; i < count; i++) {
                     const cx = spacing * (i + 1);
-                    const cy = this.canvas.height * 0.65;
-                    
                     this.urinals.push({
                         id: i,
                         x: cx,
                         y: cy,
-                        w: Math.min(spacing * 0.8, 100),
-                        h: 180,
+                        w: uW,
+                        h: uH,
                         status: config[i] || 'FREE',
                         pulse: Math.random() * Math.PI * 2
                     });
@@ -531,10 +539,11 @@
 
             input(x, y) {
                 if (this.state !== 'PLAYING') return;
-                
                 this.urinals.forEach(u => {
-                    const uH = Math.min(u.w, 80) * 1.5;
-                    const hit = x > u.x - u.w/2 && x < u.x + u.w/2 && y > u.y - uH - 50 && y < u.y + 100;
+                    const hit = x > u.x - u.w * 0.9
+                             && x < u.x + u.w * 0.9
+                             && y > u.y - u.h - u.w * 1.2
+                             && y < u.y + u.h * 0.5;
                     if (hit) this.select(u);
                 });
             }
@@ -723,88 +732,92 @@
                     ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(canvas.width, gy); ctx.stroke();
                 }
 
-                // Draw Urinals (Front-facing)
+                // Draw Urinals — all dimensions relative to uW
                 this.urinals.forEach(u => {
-                    const { x, y, w, h, status } = u;
-                    
-                    const uW = Math.min(w, 80);
-                    const uH = uW * 1.5;
-                    
-                    // Top flange
+                    const { x, y, w, status } = u;
+                    const uW = w;
+                    const uH = uW * 1.55;
+
+                    // Scale pipe hardware with uW
+                    const pipeW   = uW * 0.18;   // pipe half-width
+                    const pipeH   = uW * 0.85;   // pipe height above urinal top
+                    const pipeTop = y - uH - pipeH;
+                    const knobR   = uW * 0.13;
+                    const flangeH = uW * 0.13;
+
+                    // Top flange cap
                     ctx.fillStyle = '#64748b';
                     ctx.strokeStyle = '#1e293b';
-                    ctx.lineWidth = 4;
+                    ctx.lineWidth = Math.max(uW * 0.045, 2);
                     ctx.beginPath();
-                    ctx.ellipse(x, y - uH - 70, 16, 6, 0, 0, Math.PI*2);
+                    ctx.ellipse(x, pipeTop, pipeW * 1.2, pipeW * 0.45, 0, 0, Math.PI*2);
                     ctx.fill(); ctx.stroke();
 
                     // Main vertical pipe
-                    ctx.fillRect(x - 8, y - uH - 70, 16, 60);
-                    ctx.strokeRect(x - 8, y - uH - 70, 16, 60);
+                    ctx.fillRect(x - pipeW, pipeTop, pipeW * 2, pipeH);
+                    ctx.strokeRect(x - pipeW, pipeTop, pipeW * 2, pipeH);
 
-                    // Horizontal piece right (flush handle)
-                    ctx.fillRect(x + 8, y - uH - 50, 25, 12);
-                    ctx.strokeRect(x + 8, y - uH - 50, 25, 12);
-                    // Knob right
-                    ctx.beginPath(); ctx.arc(x + 35, y - uH - 44, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                    // Flush handle (right)
+                    const hx = x + pipeW;
+                    const hy = pipeTop + pipeH * 0.25;
+                    ctx.fillRect(hx, hy, uW * 0.32, uW * 0.14);
+                    ctx.strokeRect(hx, hy, uW * 0.32, uW * 0.14);
+                    ctx.beginPath(); ctx.arc(hx + uW * 0.32 + knobR, hy + uW * 0.07, knobR, 0, Math.PI*2);
+                    ctx.fill(); ctx.stroke();
 
-                    // Horizontal piece left (control stop)
-                    ctx.fillRect(x - 18, y - uH - 48, 10, 8);
-                    ctx.strokeRect(x - 18, y - uH - 48, 10, 8);
-                    // Knob left
-                    ctx.fillRect(x - 22, y - uH - 52, 4, 16);
-                    ctx.strokeRect(x - 22, y - uH - 52, 4, 16);
+                    // Control stop (left)
+                    ctx.fillRect(x - pipeW - uW * 0.14, hy + uW*0.02, uW*0.14, uW*0.1);
+                    ctx.strokeRect(x - pipeW - uW * 0.14, hy + uW*0.02, uW*0.14, uW*0.1);
+                    ctx.fillRect(x - pipeW - uW*0.17, hy - uW*0.04, uW*0.06, uW*0.18);
+                    ctx.strokeRect(x - pipeW - uW*0.17, hy - uW*0.04, uW*0.06, uW*0.18);
 
-                    // Bottom nut/flange connecting to urinal
-                    ctx.fillRect(x - 14, y - uH - 10, 28, 10);
-                    ctx.strokeRect(x - 14, y - uH - 10, 28, 10);
+                    // Bottom flange (pipe meets urinal)
+                    ctx.fillRect(x - pipeW * 1.1, y - uH - flangeH, pipeW * 2.2, flangeH);
+                    ctx.strokeRect(x - pipeW * 1.1, y - uH - flangeH, pipeW * 2.2, flangeH);
 
-                    // Drain
+                    // Drain trap at bottom
+                    const dW = uW * 0.16, dH = uW * 0.32, dY = y + uH * 0.18;
                     ctx.fillStyle = '#cbd5e1';
                     ctx.strokeStyle = '#1e293b';
-                    ctx.lineWidth = 3;
+                    ctx.lineWidth = Math.max(uW * 0.036, 1.5);
                     ctx.beginPath();
-                    ctx.moveTo(x - 12, y + 20);
-                    ctx.lineTo(x + 12, y + 20);
-                    ctx.lineTo(x + 12, y + 40);
-                    ctx.quadraticCurveTo(x + 12, y + 50, x + 6, y + 50);
-                    ctx.lineTo(x - 6, y + 50);
-                    ctx.quadraticCurveTo(x - 12, y + 50, x - 12, y + 40);
+                    ctx.moveTo(x - dW, dY);
+                    ctx.lineTo(x + dW, dY);
+                    ctx.lineTo(x + dW, dY + dH * 0.6);
+                    ctx.quadraticCurveTo(x + dW, dY + dH, x + dW * 0.5, dY + dH);
+                    ctx.lineTo(x - dW * 0.5, dY + dH);
+                    ctx.quadraticCurveTo(x - dW, dY + dH, x - dW, dY + dH * 0.6);
                     ctx.closePath();
                     ctx.fill(); ctx.stroke();
 
-                    // Urinal Outer Body
+                    // Urinal outer body
                     ctx.fillStyle = '#e2e8f0';
                     ctx.strokeStyle = '#1e293b';
-                    ctx.lineWidth = 4;
-                    
+                    ctx.lineWidth = Math.max(uW * 0.05, 2);
                     ctx.beginPath();
-                    ctx.moveTo(x - uW/2 + 5, y - uH);
-                    ctx.lineTo(x + uW/2 - 5, y - uH);
-                    // Right side flaring out
-                    ctx.quadraticCurveTo(x + uW/2 + 20, y - uH/2, x + uW/2 + 10, y + 20);
-                    // Bottom curve
-                    ctx.quadraticCurveTo(x, y + 40, x - uW/2 - 10, y + 20);
-                    // Left side flaring in
-                    ctx.quadraticCurveTo(x - uW/2 - 20, y - uH/2, x - uW/2 + 5, y - uH);
+                    ctx.moveTo(x - uW/2 + uW*0.06, y - uH);
+                    ctx.lineTo(x + uW/2 - uW*0.06, y - uH);
+                    ctx.quadraticCurveTo(x + uW/2 + uW*0.25, y - uH/2, x + uW/2 + uW*0.12, y + uH*0.14);
+                    ctx.quadraticCurveTo(x, y + uH*0.28, x - uW/2 - uW*0.12, y + uH*0.14);
+                    ctx.quadraticCurveTo(x - uW/2 - uW*0.25, y - uH/2, x - uW/2 + uW*0.06, y - uH);
                     ctx.closePath();
                     ctx.fill(); ctx.stroke();
-                    
-                    // Inner bowl curve
+
+                    // Inner bowl
                     ctx.fillStyle = '#f8fafc';
                     ctx.beginPath();
-                    ctx.moveTo(x - uW/2 + 15, y - uH + 15);
-                    ctx.lineTo(x + uW/2 - 15, y - uH + 15);
-                    ctx.quadraticCurveTo(x + uW/2 + 5, y - uH/2, x + uW/2 - 5, y + 10);
-                    ctx.quadraticCurveTo(x, y + 30, x - uW/2 + 5, y + 10);
-                    ctx.quadraticCurveTo(x - uW/2 - 5, y - uH/2, x - uW/2 + 15, y - uH + 15);
+                    ctx.moveTo(x - uW/2 + uW*0.18, y - uH + uW*0.2);
+                    ctx.lineTo(x + uW/2 - uW*0.18, y - uH + uW*0.2);
+                    ctx.quadraticCurveTo(x + uW/2 + uW*0.06, y - uH/2, x + uW/2 - uW*0.06, y + uH*0.08);
+                    ctx.quadraticCurveTo(x, y + uH*0.22, x - uW/2 + uW*0.06, y + uH*0.08);
+                    ctx.quadraticCurveTo(x - uW/2 - uW*0.06, y - uH/2, x - uW/2 + uW*0.18, y - uH + uW*0.2);
                     ctx.closePath();
                     ctx.fill(); ctx.stroke();
-                    
-                    // Top inner shadow/rim line (the curved indent)
+
+                    // Rim shadow arc
                     ctx.beginPath();
-                    ctx.moveTo(x - uW/2 + 15, y - uH + 15);
-                    ctx.quadraticCurveTo(x, y - uH + 40, x + uW/2 - 15, y - uH + 15);
+                    ctx.moveTo(x - uW/2 + uW*0.18, y - uH + uW*0.2);
+                    ctx.quadraticCurveTo(x, y - uH + uW*0.5, x + uW/2 - uW*0.18, y - uH + uW*0.2);
                     ctx.stroke();
 
                     if (status === 'FREE') {
@@ -816,35 +829,35 @@
                             // Strong glow
                             ctx.save();
                             ctx.shadowColor = '#6c63ff';
-                            ctx.shadowBlur = 28;
+                            ctx.shadowBlur = uW * 0.35;
                             ctx.strokeStyle = '#6c63ff';
-                            ctx.lineWidth = 4;
+                            ctx.lineWidth = Math.max(uW * 0.05, 2);
                             ctx.beginPath();
-                            ctx.roundRect(x - uW/2 - 12, y - uH - 12, uW + 24, uH + 48, 16);
+                            ctx.roundRect(x - uW/2 - uW*0.15, y - uH - uW*0.15, uW*1.3, uH + uW*0.65, 14);
                             ctx.stroke();
                             ctx.restore();
                         } else {
-                            // Subtle pulse ring on all free urinals
+                            // Subtle pulse ring
                             ctx.save();
-                            ctx.globalAlpha = 0.35 * pulse;
+                            ctx.globalAlpha = 0.38 * pulse;
                             ctx.strokeStyle = '#00c853';
-                            ctx.lineWidth = 3;
+                            ctx.lineWidth = Math.max(uW * 0.04, 2);
                             ctx.beginPath();
-                            ctx.roundRect(x - uW/2 - 10, y - uH - 10, uW + 20, uH + 44, 14);
+                            ctx.roundRect(x - uW/2 - uW*0.12, y - uH - uW*0.12, uW*1.24, uH + uW*0.55, 12);
                             ctx.stroke();
                             ctx.restore();
                         }
 
-                        // Number inside urinal
+                        // Number inside urinal — scales with uW, min 14px, max 48px
                         ctx.fillStyle = '#ffff00';
                         ctx.strokeStyle = '#1e293b';
-                        ctx.lineWidth = 6;
-                        ctx.font = `bold ${Math.max(uW * 0.55, 28)}px Arial, sans-serif`;
+                        ctx.lineWidth = Math.max(uW * 0.07, 3);
+                        ctx.font = `bold ${Math.min(Math.max(uW * 0.5, 14), 48)}px Arial, sans-serif`;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
                         ctx.lineJoin = 'round';
-                        ctx.strokeText(u.id + 1, x, y - uH/2 + 5);
-                        ctx.fillText(u.id + 1, x, y - uH/2 + 5);
+                        ctx.strokeText(u.id + 1, x, y - uH/2);
+                        ctx.fillText(u.id + 1, x, y - uH/2);
                     } else if (status === 'BROKEN') {
                         // Red cross
                         ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
