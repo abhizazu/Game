@@ -510,24 +510,41 @@
 
                 if (Math.random() > 0.5) config.reverse();
 
-                const count = config.length;
-                const W = this.canvas.width;
-                const H = this.canvas.height;
-
-                // Urinal size: fit all urinals across width, capped for desktop
-                const maxUW   = Math.min(W / (count + 1) * 0.82, W * 0.14, 110);
-                const uW      = Math.max(maxUW, 38);
-                const uH      = uW * 1.55;   // proportional height
+                const count   = config.length;
+                const W       = this.canvas.width;
+                const H       = this.canvas.height;
                 const spacing = W / (count + 1);
 
-                // Y: centre of urinal bowl sits at 62% down screen
-                const cy = H * 0.62;
+                // ── Sizing ────────────────────────────────────────────────
+                // assembly total height = pipeH + uH + drainH
+                //   pipeH  = uW * 0.85,  uH = uW * 1.55,  drainH = uW * 0.75
+                //   total  = uW * 3.15
+                // We want the assembly to fill ~62% of the usable screen height.
+                // Usable = H minus HUD (≈90px) and hint bar (≈70px).
+                const hudH     = Math.max(H * 0.12, 80);
+                const hintH    = Math.max(H * 0.10, 60);
+                const availH   = H - hudH - hintH;
+                const RATIO    = 3.15;            // assemblyH / uW
+
+                const uWbyHeight = availH * 0.72 / RATIO;  // fill 72% of usable
+                const uWbyWidth  = Math.min(spacing * 0.80, W * 0.15, 110);
+                const uW         = Math.max(Math.min(uWbyHeight, uWbyWidth), 28);
+                const uH         = uW * 1.55;
+
+                // ── Vertical position ─────────────────────────────────────
+                // assemblyTop is where pipe top sits
+                const pipeH      = uW * 0.85;
+                const drainH     = uW * 0.75;
+                const assemblyH  = pipeH + uH + drainH;
+                // Centre assembly in available zone, slightly upper-biased
+                const assemblyTop = hudH + Math.max((availH - assemblyH) * 0.30, 0);
+                // cy = urinal-bowl centre
+                const cy = assemblyTop + pipeH + uH;
 
                 for (let i = 0; i < count; i++) {
-                    const cx = spacing * (i + 1);
                     this.urinals.push({
                         id: i,
-                        x: cx,
+                        x: spacing * (i + 1),
                         y: cy,
                         w: uW,
                         h: uH,
@@ -703,32 +720,51 @@
 
             draw(now) {
                 const { ctx, canvas } = this;
-                
-                // Wall — warm gradient
-                const horizonY = canvas.height * 0.75;
+
+                // ── Horizon: derived from actual urinal position ──────────
+                // Sits just below the drain bottom so wall fills exactly the
+                // space occupied by the game content — no wasted pink space.
+                const u0 = this.urinals[0];
+                const horizonY = u0
+                    ? Math.min(u0.y + u0.w * 0.95, canvas.height * 0.88)
+                    : canvas.height * 0.72;
+
+                // ── Wall ─────────────────────────────────────────────────
                 const wallGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
-                wallGrad.addColorStop(0, '#ffe0f0');
+                wallGrad.addColorStop(0, '#fce4ec');
                 wallGrad.addColorStop(1, '#ffcfd2');
                 ctx.fillStyle = wallGrad;
                 ctx.fillRect(0, 0, canvas.width, horizonY);
 
-                // Floor — blue tiles
+                // subtle tile pattern on wall
+                ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+                ctx.lineWidth = 1;
+                const tw = Math.max(canvas.width / 8, 40);
+                for (let gx = 0; gx < canvas.width; gx += tw) {
+                    ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, horizonY); ctx.stroke();
+                }
+                for (let gy = 0; gy < horizonY; gy += tw) {
+                    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(canvas.width, gy); ctx.stroke();
+                }
+
+                // skirting board line
+                ctx.fillStyle = '#c2a9b8';
+                ctx.fillRect(0, horizonY - 6, canvas.width, 6);
+
+                // ── Floor ────────────────────────────────────────────────
                 const floorGrad = ctx.createLinearGradient(0, horizonY, 0, canvas.height);
                 floorGrad.addColorStop(0, '#90caf9');
-                floorGrad.addColorStop(1, '#a2d2ff');
+                floorGrad.addColorStop(1, '#bbdefb');
                 ctx.fillStyle = floorGrad;
                 ctx.fillRect(0, horizonY, canvas.width, canvas.height - horizonY);
 
-                // Floor grid
-                ctx.strokeStyle = 'rgba(2,132,199,0.45)'; ctx.lineWidth = 1.5;
-                const tileSize = 60;
-                for(let gx = (canvas.width/2) % tileSize; gx < canvas.width; gx += tileSize) {
+                // Floor grid tiles
+                const tileSize = Math.max(canvas.width / 7, 36);
+                ctx.strokeStyle = 'rgba(2,100,180,0.30)'; ctx.lineWidth = 1;
+                for (let gx = 0; gx < canvas.width; gx += tileSize) {
                     ctx.beginPath(); ctx.moveTo(gx, horizonY); ctx.lineTo(gx, canvas.height); ctx.stroke();
                 }
-                for(let gx = (canvas.width/2) % tileSize - tileSize; gx > 0; gx -= tileSize) {
-                    ctx.beginPath(); ctx.moveTo(gx, horizonY); ctx.lineTo(gx, canvas.height); ctx.stroke();
-                }
-                for(let gy = horizonY; gy < canvas.height; gy += tileSize) {
+                for (let gy = horizonY; gy < canvas.height; gy += tileSize) {
                     ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(canvas.width, gy); ctx.stroke();
                 }
 
